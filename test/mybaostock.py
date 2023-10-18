@@ -1,4 +1,4 @@
-import test.mybaostock as bs
+import baostock as bs
 import pandas as pd
 
 try:
@@ -14,7 +14,7 @@ try:
     # 周月线指标：date,code,open,high,low,close,volume,amount,adjustflag,turn,pctChg
     rs = bs.query_history_k_data_plus("sh.600000",
         "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,isST",
-        start_date='2017-07-01', end_date='2017-12-31',
+        start_date='2013-07-01', end_date='2023-12-31',
         frequency="d", adjustflag="3")
     print('query_history_k_data_plus respond error_code:'+rs.error_code)
     print('query_history_k_data_plus respond  error_msg:'+rs.error_msg)
@@ -27,7 +27,7 @@ try:
     result = pd.DataFrame(data_list, columns=rs.fields)
 
     #### 结果集输出到csv文件 ####   
-    result.to_csv("D:\\history_A_stock_k_data.csv", index=False)
+    result.to_csv("history_A_stock_k_data.csv", index=False)
     print(result)
 
     #### 登出系统 ####

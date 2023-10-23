@@ -1,7 +1,7 @@
 import baostock as bs
 import pandas as pd
 import os
-import datetime, time
+import datetime
 
 class mybaostock:
     stock_list = "./stock/hs300_stocks.csv"
@@ -74,9 +74,9 @@ class mybaostock:
 
                 #### 结果集输出到csv文件 ####   
                 if file_exists:
-                    result.to_csv(file_name, index=False)
-                else:
                     result.to_csv(file_name, mode='a', header=False, index=False)
+                else:
+                    result.to_csv(file_name, index=False)
         except Exception as e:
             print("baostack exception")
             print(e)

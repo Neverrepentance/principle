@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from avg_compute import Compute_Avg
 
 class stock_compute:
     file_name = ""
@@ -13,18 +14,6 @@ class stock_compute:
     # 下一个交易日动作，0 - 不做任何动作，1 - 最大买入，2 - 清仓
     next_action = 0
 
-    last_5 = [0] * 5
-    avg_5 = 0.0
-    total_5 = 0.0
-    last_5_idx = 0
-    avg_5_history = [0] * 3
-
-    last_10 = [0] * 10 
-    avg_10 = 0.0
-    total_10 = 0.0
-    last_10_idx = 0
-    avg_10_history = [0] * 3
-
     pre_max = 0.0
 
     max_drop = 0.0
@@ -32,19 +21,24 @@ class stock_compute:
 
     def __init__(self, stock_histry_file) -> None:
         self.file_name = stock_histry_file
+        self.avg_5 = Compute_Avg(5)
+        self.avg_10 = Compute_Avg(10)
+        self.avg_20 = Compute_Avg(20)
 
     def compute(self):
         data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,5,7])
         for i in range(len(data)):
+            volume = int(data['volume'][i])
+            if volume < 1 :
+                continue
             close_price = float(data['close'][i])
             open_price = float(data['open'][i])
             self.compute_average(close_price)
             # 10天以内均线值还不正常
-            if i < 10:
+            if i < 20:
                 continue
 
             # 执行交易动作后，根据当天收盘价还可以计算下一个交易日的交易动作    
-            volume = int(data['volume'][i])
             ## 交易量超过1万股才有交易机会
             if volume > 10000:
                 self.compute_income(data['date'][i],open_price)
@@ -74,7 +68,8 @@ class stock_compute:
             if charge < 5:
                 charge = 5
             self.cash_number = self.cash_number  - self.stock_number * price_100 - charge
-            print("%s 买入 %d 手，价格：%.2f"%(action_date,self.stock_number,price))
+            print("%s Avg5 %.2f > Avg10 %.2f,  买入 %d 手，价格：%.2f"%(action_date, self.avg_5.history[2], \
+                                                                self.avg_10.history[2], self.stock_number, price))
         elif self.next_action == 2: 
             assert self.stock_number > 0
             price_100 = price* 100
@@ -82,7 +77,8 @@ class stock_compute:
             if charge < 5:
                 charge = 5
             self.cash_number = self.cash_number  + self.stock_number * price_100 - charge
-            print("%s 卖出 %d 手，价格：%.2f, 总资产：%.2f"%(action_date,self.stock_number,price,self.cash_number))
+            print("%s Avg5 %.2f < Avg10 %.2f,  卖出 %d 手，价格：%.2f, 总资产：%.2f"%(action_date, self.avg_5.history[2], \
+                                                                self.avg_10.history[2], self.stock_number, price, self.cash_number))
             self.stock_number = 0            
 
         self.next_action = 0
@@ -98,31 +94,21 @@ class stock_compute:
 
     def compute_buy_point(self):
         ## 计算买点
-        if (self.avg_5_history[0] < self.avg_10_history[0] or self.avg_5_history[1] < self.avg_10_history[1])  \
-            and self.avg_5_history[2] > self.avg_10_history[2] :
+        if(self.avg_5.history[2] < self.avg_20.history[2]):
+            return
+
+        if ((self.avg_5.history[0] < self.avg_10.history[0]) or (self.avg_5.history[1] < self.avg_10.history[1]))  \
+            and (self.avg_5.history[2] > self.avg_10.history[2]) :
             self.next_action = 1
 
     def compute_sale_point(self):
         ## 计算卖点
-        if (self.avg_5_history[0] > self.avg_10_history[0] or self.avg_5_history[1] > self.avg_10_history[1])  \
-            and self.avg_5_history[2] < self.avg_10_history[2] :
+        if ((self.avg_5.history[0] > self.avg_10.history[0]) or (self.avg_5.history[1] > self.avg_10.history[1]))  \
+            and (self.avg_5.history[2] < self.avg_10.history[2]) :
             self.next_action = 2
 
     def compute_average(self, close_price):
         ## 计算均线        
-        self.total_5 = self.total_5 - self.last_5[self.last_5_idx] + close_price
-        self.avg_5 = self.total_5 / 5
-        self.last_5[self.last_5_idx] = close_price
-        self.last_5_idx = (self.last_5_idx + 1) % 5
-        self.avg_5_history[0] = self.avg_5_history[1]
-        self.avg_5_history[1] = self.avg_5_history[2]
-        self.avg_5_history[2] = self.avg_5
-
-        
-        self.total_10 = self.total_10 - self.last_10[self.last_10_idx] + close_price
-        self.avg_10 = self.total_10 / 10
-        self.last_10[self.last_10_idx] = close_price
-        self.last_10_idx = (self.last_10_idx + 1) % 10
-        self.avg_10_history[0] = self.avg_10_history[1]
-        self.avg_10_history[1] = self.avg_10_history[2]
-        self.avg_10_history[2] = self.avg_10
+        self.avg_5.new_value(close_price)
+        self.avg_10.new_value(close_price)
+        self.avg_20.new_value(close_price)

@@ -26,7 +26,7 @@ class stock_compute:
         self.avg_20 = Compute_Avg(20)
 
     def compute(self):
-        data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,5,7])
+        data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,3,5,7])
         for i in range(len(data)):
             volume = int(data['volume'][i])
             if volume < 1 :
@@ -45,7 +45,9 @@ class stock_compute:
 
             # 计算买点、卖点后，只有下一个交易日才能动作
             if self.stock_number > 0 :
-                self.compute_sale_point()
+                max_in_3days = float(data['high'][i-2])  if float(data['high'][i-2]) > float(data['high'][i-1]) else float(data['high'][i-1])
+                max_in_3days = max_in_3days if max_in_3days > float(data['high'][i]) else float(data['high'][i])
+                self.compute_sale_point(max_in_3days,close_price)
             else:
                 self.compute_buy_point()
 
@@ -94,17 +96,28 @@ class stock_compute:
 
     def compute_buy_point(self):
         ## 计算买点
+
+        # MA5 必须大于 MA20
         if(self.avg_5.history[2] < self.avg_20.history[2]):
             return
+        
+        # MA10 必须上行
+        if(self.avg_10.history[1] > self.avg_10.history[2]):
+            return
 
+        # MA5 必须上穿 MA10
         if ((self.avg_5.history[0] < self.avg_10.history[0]) or (self.avg_5.history[1] < self.avg_10.history[1]))  \
             and (self.avg_5.history[2] > self.avg_10.history[2]) :
             self.next_action = 1
 
-    def compute_sale_point(self):
+    def compute_sale_point(self, max_3, close_price):
         ## 计算卖点
         if ((self.avg_5.history[0] > self.avg_10.history[0]) or (self.avg_5.history[1] > self.avg_10.history[1]))  \
             and (self.avg_5.history[2] < self.avg_10.history[2]) :
+            self.next_action = 2
+            return
+        
+        if max_3 * 0.97 > close_price:
             self.next_action = 2
 
     def compute_average(self, close_price):

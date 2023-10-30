@@ -26,28 +26,28 @@ class stock_compute:
         self.avg_20 = Compute_Avg(20)
 
     def compute(self):
-        data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,3,5,7])
-        for i in range(len(data)):
-            volume = int(data['volume'][i])
+        self.data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,3,5,7])
+        datalen = len(self.data)
+        self.idx = 0
+        for self.idx  in range(datalen):
+            volume = int(self.data['volume'][self.idx])
             if volume < 1 :
                 continue
-            close_price = float(data['close'][i])
-            open_price = float(data['open'][i])
+            close_price = float(self.data['close'][self.idx])
+            open_price = float(self.data['open'][self.idx])
             self.compute_average(close_price)
             # 10天以内均线值还不正常
-            if i < 20:
+            if self.idx < 20:
                 continue
 
             # 执行交易动作后，根据当天收盘价还可以计算下一个交易日的交易动作    
             ## 交易量超过1万股才有交易机会
             if volume > 10000:
-                self.compute_income(data['date'][i],open_price)
+                self.compute_income(self.data['date'][self.idx],open_price)
 
             # 计算买点、卖点后，只有下一个交易日才能动作
             if self.stock_number > 0 :
-                max_in_3days = float(data['high'][i-2])  if float(data['high'][i-2]) > float(data['high'][i-1]) else float(data['high'][i-1])
-                max_in_3days = max_in_3days if max_in_3days > float(data['high'][i]) else float(data['high'][i])
-                self.compute_sale_point(max_in_3days,close_price)
+                self.compute_sale_point(close_price)
             else:
                 self.compute_buy_point()
 
@@ -110,15 +110,19 @@ class stock_compute:
             and (self.avg_5.history[2] > self.avg_10.history[2]) :
             self.next_action = 1
 
-    def compute_sale_point(self, max_3, close_price):
+    def compute_sale_point(self, close_price):
         ## 计算卖点
-        if ((self.avg_5.history[0] > self.avg_10.history[0]) or (self.avg_5.history[1] > self.avg_10.history[1]))  \
-            and (self.avg_5.history[2] < self.avg_10.history[2]) :
+        if ((self.avg_5.history[0] > self.avg_20.history[0]) or (self.avg_5.history[1] > self.avg_20.history[1]))  \
+            and (self.avg_5.history[2] < self.avg_20.history[2]) :
             self.next_action = 2
             return
         
-        if max_3 * 0.97 > close_price:
-            self.next_action = 2
+        
+        # max_in_3days = float(self.data['high'][self.idx-2])  if float(self.data['high'][self.idx-2]) > float(self.data['high'][self.idx-1]) else float(self.data['high'][self.idx-1])
+        # max_in_3days = max_in_3days if max_in_3days > float(self.data['high'][self.idx]) else float(self.data['high'][self.idx])
+        
+        # if (max_in_3days * 0.97 > close_price) and (close_price < self.data["close"][self.idx -1]):
+        #     self.next_action = 2
 
     def compute_average(self, close_price):
         ## 计算均线        

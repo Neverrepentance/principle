@@ -14,9 +14,17 @@ class stock_compute:
     # 下一个交易日动作，0 - 不做任何动作，1 - 最大买入，2 - 清仓
     next_action = 0
 
+    # 最高收益
     pre_max = 0.0
 
+    # 最大回撤
     max_drop = 0.0
+
+    # 建议多少个交易日后再交易
+    action_after_days = 0
+
+    # 记录前一个交易日的收盘价，用于前复权计算
+    pre_close = 0
 
 
     def __init__(self, stock_histry_file) -> None:
@@ -26,7 +34,7 @@ class stock_compute:
         self.avg_20 = Compute_Avg(20)
 
     def compute(self):
-        self.data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,3,5,7])
+        self.data = pd.read_csv(self.file_name, sep=',', header='infer',usecols=[0,2,3,5,6,7])
         datalen = len(self.data)
         self.idx = 0
         for self.idx  in range(datalen):
@@ -54,6 +62,7 @@ class stock_compute:
     def get_result(self):
         ## 获取最后数据
         income = (self.cash_number - 100000)/100000
+        print("最高收益：%.2f,最大回撤：%.2f"%(self.pre_max,self.max_drop))
         return income, self.max_drop
 
     
@@ -72,6 +81,7 @@ class stock_compute:
             self.cash_number = self.cash_number  - self.stock_number * price_100 - charge
             print("%s Avg5 %.2f > Avg10 %.2f,  买入 %d 手，价格：%.2f"%(action_date, self.avg_5.history[2], \
                                                                 self.avg_10.history[2], self.stock_number, price))
+            self.action_after_days = 40
         elif self.next_action == 2: 
             assert self.stock_number > 0
             price_100 = price* 100
@@ -81,51 +91,51 @@ class stock_compute:
             self.cash_number = self.cash_number  + self.stock_number * price_100 - charge
             print("%s Avg5 %.2f < Avg10 %.2f,  卖出 %d 手，价格：%.2f, 总资产：%.2f"%(action_date, self.avg_5.history[2], \
                                                                 self.avg_10.history[2], self.stock_number, price, self.cash_number))
-            self.stock_number = 0            
+            self.stock_number = 0           
+            # self.action_after_days = self.action_after_days if self.action_after_days > 20  else 20
+        
+            ## 卖出时计算
+            ## 最高收益
+            self.pre_max = self.pre_max if self.pre_max > self.cash_number else self.cash_number
+            ## 最高回撤
+            drop_count = (self.pre_max - self.cash_number) / self.pre_max
+            self.max_drop = self.max_drop if self.max_drop > drop_count else drop_count
 
         self.next_action = 0
-        
-        ## 最高收益
-        if self.cash_number > self.pre_max:
-            self.pre_max = self.cash_number
-
-        ## 最高回撤
-        if (self.pre_max - self.cash_number) / self.pre_max * 100 > self.max_drop :
-            self.max_drop = (self.pre_max - self.cash_number) / self.pre_max * 100
 
 
     def compute_buy_point(self):
         ## 计算买点
 
-        # MA5 必须大于 MA20
-        if(self.avg_5.history[2] < self.avg_20.history[2]):
-            return
+        if self.action_after_days > 0:
+            self.action_after_days = self.action_after_days -1
         
-        # MA10 必须上行
-        if(self.avg_10.history[1] > self.avg_10.history[2]):
-            return
-
-        # MA5 必须上穿 MA10
-        if ((self.avg_5.history[0] < self.avg_10.history[0]) or (self.avg_5.history[1] < self.avg_10.history[1]))  \
-            and (self.avg_5.history[2] > self.avg_10.history[2]) :
-            self.next_action = 1
+        # MA20 翻转
+        if((self.avg_20.history[0] > self.avg_20.history[1]) and (self.avg_20.history[2] > self.avg_20.history[1])):
+            ## 买点更高，或者买点间隔超过40天
+            if (self.action_after_days <= 0 ) or (self.avg_20.history[1] > self.pre_min):
+                self.next_action = 1
+            # 阶段低点，即买点
+            self.pre_min = self.avg_20.history[1]
+            
 
     def compute_sale_point(self, close_price):
         ## 计算卖点
-        if ((self.avg_5.history[0] > self.avg_20.history[0]) or (self.avg_5.history[1] > self.avg_20.history[1]))  \
-            and (self.avg_5.history[2] < self.avg_20.history[2]) :
+        if ((self.avg_20.history[1] >= self.avg_20.history[2]) or (self.avg_20.history[2] > close_price)) :
             self.next_action = 2
-            return
-        
-        
-        # max_in_3days = float(self.data['high'][self.idx-2])  if float(self.data['high'][self.idx-2]) > float(self.data['high'][self.idx-1]) else float(self.data['high'][self.idx-1])
-        # max_in_3days = max_in_3days if max_in_3days > float(self.data['high'][self.idx]) else float(self.data['high'][self.idx])
-        
-        # if (max_in_3days * 0.97 > close_price) and (close_price < self.data["close"][self.idx -1]):
-        #     self.next_action = 2
 
     def compute_average(self, close_price):
         ## 计算均线        
+        preclose_compute = self.data['preclose'][self.idx]
+        if preclose_compute < self.pre_close:
+            income = self.pre_close - preclose_compute
+            if self.stock_number > 0:
+                self.cash_number = self.cash_number + self.stock_number * income
+            # self.avg_5.reduce_history(income)
+            # self.avg_10.reduce_history(income)
+            # self.avg_20.reduce_history(income)
+
         self.avg_5.new_value(close_price)
         self.avg_10.new_value(close_price)
         self.avg_20.new_value(close_price)
+        self.pre_close = close_price

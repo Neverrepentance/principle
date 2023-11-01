@@ -27,3 +27,11 @@ class Compute_Avg:
         self.history[0] = self.history[1]
         self.history[1] = self.history[2]
         self.history[2] = self.avg
+
+    # 前复权
+    def reduce_history(self, vlaue):
+        for i in range(self.size):
+            self.last[i] = self.last[i] - vlaue
+
+        for i in range(3):
+            self.history[i] = self.history[i] - vlaue
